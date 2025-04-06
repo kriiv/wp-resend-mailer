@@ -23,6 +23,8 @@ class WP_Resend_Mailer_Admin {
 
         // Hook the AJAX action to the method in the API handler instance
         add_action('wp_ajax_wp_resend_mailer_test', array($this->api_handler, 'handle_test_email_ajax'));
+        // Hook the AJAX action for health check
+        add_action('wp_ajax_wp_resend_mailer_health_check', array($this->api_handler, 'handle_health_check_ajax'));
     }
 
     public function add_admin_menu() {
@@ -42,6 +44,7 @@ class WP_Resend_Mailer_Admin {
         register_setting($settings_group, 'wp_resend_mailer_from_email', ['sanitize_callback' => 'sanitize_email']);
         register_setting($settings_group, 'wp_resend_mailer_from_name', ['sanitize_callback' => 'sanitize_text_field']);
         register_setting($settings_group, 'wp_resend_mailer_enabled', ['sanitize_callback' => 'rest_sanitize_boolean']);
+        register_setting($settings_group, 'wp_resend_mailer_fallback_enabled', ['sanitize_callback' => 'rest_sanitize_boolean']);
 
         add_settings_section(
             'wp_resend_mailer_settings_section',
@@ -81,6 +84,14 @@ class WP_Resend_Mailer_Admin {
             $settings_group,
             'wp_resend_mailer_settings_section'
         );
+
+        add_settings_field(
+            'wp_resend_mailer_fallback_enabled',
+            __('Enable Fallback', 'wp-resend-mailer'),
+            array($this, 'fallback_enabled_field_callback'),
+            $settings_group,
+            'wp_resend_mailer_settings_section'
+        );
     }
 
     public function enqueue_admin_scripts($hook_suffix) {
@@ -99,7 +110,9 @@ class WP_Resend_Mailer_Admin {
         wp_localize_script('wp-resend-mailer-admin-js', 'wpResendMailer', array(
             'ajax_url' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('wp_resend_mailer_test_nonce'),
+            'health_check_nonce' => wp_create_nonce('wp_resend_mailer_health_check_nonce'),
             'sending_text' => esc_html__('Sending test email...', 'wp-resend-mailer'),
+            'checking_text' => esc_html__('Checking connection...', 'wp-resend-mailer'),
             'error_generic' => esc_html__('An error occurred. Please try again.', 'wp-resend-mailer'),
             'error_no_email' => esc_html__('Please enter a valid email address.', 'wp-resend-mailer'),
         ));
@@ -142,6 +155,12 @@ class WP_Resend_Mailer_Admin {
         echo '<label for="wp_resend_mailer_enabled">' . esc_html__('Enable to use Resend for sending WordPress emails.', 'wp-resend-mailer') . '</label>';
     }
 
+    public function fallback_enabled_field_callback() {
+        $enabled = get_option('wp_resend_mailer_fallback_enabled');
+        echo '<input type="checkbox" id="wp_resend_mailer_fallback_enabled" name="wp_resend_mailer_fallback_enabled" value="1" ' . checked(1, $enabled, false) . ' />';
+        echo '<label for="wp_resend_mailer_fallback_enabled">' . esc_html__('If sending via Resend fails, attempt to send using the default WordPress mailer instead.', 'wp-resend-mailer') . '</label>';
+    }
+
     public function render_settings_page() {
         ?>
         <div class="wrap">
@@ -179,6 +198,13 @@ class WP_Resend_Mailer_Admin {
             
             <?php // Note: The JavaScript is now enqueued via enqueue_admin_scripts ?>
         </div>
+        <hr>
+        <h2><?php echo esc_html__( 'Connection Status', 'wp-resend-mailer' ); ?></h2>
+        <p><?php echo esc_html__( 'Check if the plugin can connect to the Resend API with your current settings.', 'wp-resend-mailer' ); ?></p>
+        <button type="button" id="check_connection" class="button button-secondary">
+            <?php echo esc_html__( 'Check Connection', 'wp-resend-mailer' ); ?>
+        </button>
+        <div id="connection_status" style="margin-top: 10px;"></div>
         <?php
     }
 } 
