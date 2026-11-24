@@ -1,46 +1,48 @@
 # WP Resend Mailer
 
-[![License: GPL v2 or later](https://img.shields.io/badge/License-GPL%20v2%20or%20later-blue.svg?style=flat-square)](https://www.gnu.org/licenses/gpl-2.0.html)
-[![GitHub repository](https://img.shields.io/badge/GitHub-Repo-blue.svg?style=flat-square)](https://github.com/kriiv/wp-resend-mailer)
-<!-- Add other relevant badges like WordPress version compatibility, build status etc. -->
+Sends every WordPress email through [Resend](https://resend.com): password resets, WooCommerce order emails, admin
+notices, anything that uses `wp_mail()`. One settings page, no JavaScript, no upsells.
 
-Send your WordPress site's emails reliably through the [Resend](https://resend.com) API.
+## How it works
 
-WP Resend Mailer overrides the default `wp_mail()` function to send all outgoing emails from your WordPress installation via the Resend transactional email service API. This ensures higher deliverability compared to standard PHP mail and provides access to Resend's features and tracking capabilities (via your Resend dashboard).
+WordPress still builds each email the normal way (From name, HTML or plain text, CC, BCC, Reply-To, attachments, and
+every plugin's filters). Only the last step changes: instead of handing the message to the server's `mail()`, the
+plugin posts it to the Resend API.
 
-## Features
+- **Failures are real failures.** If Resend rejects an email, `wp_mail()` returns `false` and fires
+  `wp_mail_failed` with Resend's error, so other plugins (and health checks) see it.
+- **From address:** always the one you set (Resend only sends from verified domains). The sender *name* a plugin sets
+  is kept, e.g. WooCommerce's shop name; WordPress's default "WordPress" is replaced with yours.
+- **Reply-To:** kept. If an email claims to be from another address (a contact form, WooCommerce's "From" setting)
+  and has no Reply-To, that address becomes the Reply-To, so hitting Reply still reaches the right person.
+- **Plain text stays plain text** (WordPress's own emails), HTML is sent as HTML with its text version.
+- **Fallback (optional, off by default):** if Resend fails, try the server's own mail instead.
 
-*   **Reliable Email Delivery:** Leverages the Resend API (`https://api.resend.com/emails`) for sending emails.
-*   **Custom Sender:** Define the "From" email address and name (must use a verified domain in Resend).
-*   **Enable/Disable:** Easily toggle the Resend integration on or off without losing settings.
-*   **Test Email:** Send a test email to verify your configuration directly from the settings page.
-*   **Reply-To Header Support:** Correctly passes the `Reply-To` header set in WordPress emails to Resend.
-*   **Plain Text Support:** Sends both HTML (`Body`) and Plain Text (`AltBody`) versions of emails when available, improving compatibility.
-*   **Attachments:** Supports sending email attachments included via `wp_mail()`.
-*   **Fallback Option:** Optionally attempt sending via the default WordPress mailer *only if* the Resend API call fails.
-*   **Connection Health Check:** Verify API key validity and check the configured 'From Email' domain's verification status in Resend directly from the settings page.
+## Setup
 
-## Usage
+1. In Resend: add and verify your domain (DNS records), then create an API key. "Sending access" limited to the
+   domain is enough.
+2. Install the plugin (Plugins → Add New → Upload Plugin, with this repo's zip) and activate it.
+3. **Settings → Resend:** paste the API key, set the From address (on the verified domain) and the From name. Save.
+4. Click **Send test email**.
 
-Once configured and enabled, the plugin works automatically in the background. Any WordPress component or plugin that uses the standard `wp_mail()` function will have its emails routed through the Resend API using the settings you provided.
+### Keeping the key out of the database (recommended)
 
-You can use the **Send Test Email** feature on the settings page to quickly verify your setup. Use the **Check Connection** button to diagnose API key and domain verification status.
+Put it in `wp-config.php` instead; the settings page then shows it as set there:
 
-## Frequently Asked Questions (FAQ)
+```php
+define('RESEND_API_KEY', 're_...');
+define('RESEND_FROM_EMAIL', 'hello@yourdomain.com'); // optional
+define('RESEND_FROM_NAME', 'Your Site');              // optional
+```
 
-*   **Where do I get my Resend API Key?**
-    Log in to your Resend account and navigate to the [API Keys](https://resend.com/api-keys) section.
-*   **Why do I need to verify my domain?**
-    Resend requires domain verification to ensure you own the domain you're sending emails from. This is a standard practice to prevent spam and maintain high deliverability. You can manage domains in the [Domains](https://resend.com/domains) section of your Resend account.
-*   **Does this plugin support Resend features like tags or webhooks?**
-    Currently, the plugin focuses on replacing the core `wp_mail()` functionality. It does not have built-in UI support for adding Resend-specific tags to emails or handling incoming webhooks for tracking. However, filter hooks might be added in the future to allow developers to customize the API payload.
-*   **What happens if the Resend API is down or my key is invalid?**
-    If the Resend API call fails and the "Enable Fallback" option is checked, the plugin will attempt to use the default WordPress mailer. If fallback is disabled, the email will fail to send, and an error will be logged in your PHP error log. Use the "Check Connection" button to verify your API key.
+## For developers
 
-## Contributing
-
-Contributions are welcome! If you find a bug or have a feature request, please open an issue on the [GitHub repository](https://github.com/kriiv/wp-resend-mailer/issues). Pull requests are also appreciated.
+- `wp_resend_mailer_is_active()`: true when emails are going through Resend.
+- `wp_resend_mailer_settings()`: the settings in use (constants win over the settings page).
+- `wp_resend_mailer_payload` filter: change the Resend request (e.g. add `tags`) before it's sent.
+- The last send (success or error) is in the `wp_resend_mailer_last` option and shown on the settings page.
 
 ## License
 
-This plugin is licensed under the GPLv2 (or later).
+GPLv2 or later.
